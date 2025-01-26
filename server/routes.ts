@@ -584,7 +584,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ message: "Course not found" });
       }
 
-      console.log('Saving lesson plans:', {
+      console.log('Processing lesson plans:', {
         courseId,
         datesCount: dates.length,
         lessonsCount: lessons.length,
@@ -592,53 +592,32 @@ export function registerRoutes(app: Express): Server {
         sampleLesson: lessons[0]
       });
 
-      // First, insert standards for lessons that have them
-      const standardPromises = lessons
-        .filter(lesson => lesson.standard)
-        .map(async (lesson: any) => {
-          if (!lesson.standard) return null;
-
-          const [standard] = await db
-            .insert(educationalStandards)
-            .values({
-              identifier: lesson.standard,
-              name: lesson.standard,
-              type: 'common_core',
-              subject: course.subject || 'unknown',
-              gradeLevel: course.gradeLevel || 'unknown',
-              description: `Standard for ${lesson.title}`,
-            })
-            .onConflictDoUpdate({
-              target: educationalStandards.identifier,
-              set: {
-                name: lesson.standard,
-                type: 'common_core',
-                subject: course.subject || 'unknown',
-                gradeLevel: course.gradeLevel || 'unknown',
-                description: `Standard for ${lesson.title}`,
-              }
-            })
-            .returning();
-
-          return standard;
-        });
-
-      await Promise.all(standardPromises);
-
-      // Then create the weekly topics with the correct standard references
+      // Then create the weekly topics directly
       const topics = await Promise.all(
         lessons.map(async (lesson: any, index: number) => {
-          const [topic] = await db
-            .insert(weeklyTopics)
-            .values({
-              courseId: parseInt(courseId),
-              topic: lesson.title,
-              standardIdentifier: lesson.standard || null,
-              weekStart: new Date(dates[index]),
-            })
-            .returning();
+          try {
+            // Parse and validate the date
+            const weekStart = new Date(dates[index]);
+            if (isNaN(weekStart.getTime())) {
+              throw new Error(`Invalid date format for lesson ${index + 1}`);
+            }
 
-          return topic;
+            const [topic] = await db
+              .insert(weeklyTopics)
+              .values({
+                courseId: parseInt(courseId),
+                topic: lesson.title,
+                standardIdentifier: lesson.standard || null,
+                weekStart: weekStart,
+              })
+              .returning();
+
+            console.log(`Successfully created topic for lesson ${index + 1}:`, topic);
+            return topic;
+          } catch (error) {
+            console.error(`Error creating topic for lesson ${index + 1}:`, error);
+            throw error;
+          }
         })
       );
 
@@ -646,7 +625,8 @@ export function registerRoutes(app: Express): Server {
       res.json(topics);
     } catch (error) {
       console.error("Failed to save plan:", error);
-      res.status(500).json({ message: "Failed to save curriculum plan" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to save curriculum plan";
+      res.status(500).json({ message: errorMessage });
     }
   });
 
