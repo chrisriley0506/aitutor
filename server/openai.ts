@@ -45,24 +45,17 @@ export async function analyzePDFContent(input: PDFAnalysisInput): Promise<{ less
             {
               role: "system",
               content: `You are an expert curriculum analyzer for ${input.metadata.grade} grade ${input.metadata.subject}.
-You will receive text from a pacing guide PDF that may be related to ${input.metadata.standardsSystem}. Extract lessons and format them as a clean JSON array.
+I am uploading a pdf of a pacing guide that may be related to ${input.metadata.standardsSystem}. The pdf may be formatted in a table format with one column being the actual standard, the other column is a title/description of the lesson. We want to identify which of the columns are the standard and what is the title. Note that some titles don't have a standard attached and are things like tests, quizzes and reviews. It is NOT in a format that is conducive to typical text parsing and will need to be analyzed using NLP.
 
-Guidelines:
-1. Each lesson should have:
-   - day: sequential number starting from 1
-   - title: clear, concise lesson title
-   - standard: standard code (like "CC.3.NBT.1") or null for tests/reviews
-2. Clean any special characters from titles
-3. Ensure all JSON strings are properly escaped
-4. Keep titles under 100 characters
+Your job as an education expert is to take all of this text and then reformat it so that we have structured data. You'll first read through the PDF and identify how the text is structured and then pull out a daily lesson plan. You can indicate the date as an integer with each lesson plan having a +1 numeral. The lesson plan will have at least a title, but often be associated with a standard. 
 
-Format your response EXACTLY as this JSON:
+Format your response EXACTLY as this JSON (no other text):
 {
   "lessons": [
     {
       "day": 1,
-      "title": "Introduction to Addition",
-      "standard": "CC.3.NBT.1"
+      "title": "Lesson title",
+      "standard": "CC.3.NBT.1"  // use null for lessons without standards (tests, reviews, etc)
     }
   ]
 }`
@@ -73,7 +66,6 @@ Format your response EXACTLY as this JSON:
             }
           ],
           temperature: 0.3,
-          response_format: { type: "json_object" }
         });
 
         const content = response.choices[0].message.content;
@@ -83,46 +75,33 @@ Format your response EXACTLY as this JSON:
 
         console.log('Raw OpenAI response:', content);
 
-        // Clean the response before parsing
-        const cleanedContent = content
-          .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // Remove control characters
-          .replace(/\\[^"\\\/bfnrtu]/g, "\\\\") // Escape backslashes
-          .replace(/\r?\n|\r/g, " ") // Replace newlines with spaces
-          .trim();
+        const parsed = JSON.parse(content);
 
-        try {
-          const parsed = JSON.parse(cleanedContent);
-
-          if (!parsed.lessons || !Array.isArray(parsed.lessons)) {
-            throw new Error("Invalid response structure");
-          }
-
-          // Validate and clean each lesson
-          const validLessons = parsed.lessons
-            .filter((lesson: any) => 
-              lesson && 
-              typeof lesson.day === "number" &&
-              typeof lesson.title === "string" && 
-              lesson.title.trim() &&
-              (lesson.standard === null || typeof lesson.standard === "string")
-            )
-            .map((lesson: any) => ({
-              day: lesson.day,
-              title: lesson.title.trim().slice(0, 100), // Limit title length
-              standard: lesson.standard
-            }));
-
-          if (validLessons.length === 0) {
-            throw new Error("No valid lessons found");
-          }
-
-          console.log('Successfully parsed lessons:', validLessons.slice(0, 2));
-          return { lessons: validLessons };
-        } catch (parseError) {
-          console.error('JSON Parse Error:', parseError);
-          console.error('Content that failed to parse:', cleanedContent);
-          throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
+        if (!parsed.lessons || !Array.isArray(parsed.lessons)) {
+          throw new Error("Invalid response structure");
         }
+
+        // Modified validation to allow null standards
+        const validLessons = parsed.lessons
+          .filter((lesson: any) => 
+            lesson && 
+            typeof lesson.day === "number" &&
+            typeof lesson.title === "string" && 
+            lesson.title.trim() &&
+            (lesson.standard === null || typeof lesson.standard === "string")
+          )
+          .map((lesson: any) => ({
+            day: lesson.day,
+            title: lesson.title.trim(),
+            standard: lesson.standard
+          }));
+
+        if (validLessons.length === 0) {
+          throw new Error("No valid lessons found");
+        }
+
+        console.log('Parsed lessons:', validLessons.slice(0, 2));
+        return { lessons: validLessons };
 
       } catch (error: any) {
         lastError = error;

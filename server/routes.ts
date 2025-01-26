@@ -584,15 +584,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ message: "Course not found" });
       }
 
-      console.log('Processing lesson plans:', {
-        courseId,
-        datesCount: dates.length,
-        lessonsCount: lessons.length,
-        sampleDate: dates[0],
-        sampleLesson: lessons[0]
-      });
-
-      // Then create the weekly topics directly
+      // Create the weekly topics directly
       const topics = await Promise.all(
         lessons.map(async (lesson: any, index: number) => {
           try {
