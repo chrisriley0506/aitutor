@@ -585,35 +585,40 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Create the weekly topics directly
-      const topics = await Promise.all(
-        lessons.map(async (lesson: any, index: number) => {
-          try {
-            // Parse and validate the date
-            const weekStart = new Date(dates[index]);
-            if (isNaN(weekStart.getTime())) {
-              throw new Error(`Invalid date format for lesson ${index + 1}`);
-            }
-
-            const [topic] = await db
-              .insert(weeklyTopics)
-              .values({
-                courseId: parseInt(courseId),
-                topic: lesson.title,
-                standardIdentifier: lesson.standard || null,
-                weekStart: weekStart,
-              })
-              .returning();
-
-            console.log(`Successfully created topic for lesson ${index + 1}:`, topic);
-            return topic;
-          } catch (error) {
-            console.error(`Error creating topic for lesson ${index + 1}:`, error);
-            throw error;
+      const topics = [];
+      for (let i = 0; i < lessons.length; i++) {
+        const lesson = lessons[i];
+        try {
+          // Parse and validate the date
+          const weekStart = new Date(dates[i]);
+          if (isNaN(weekStart.getTime())) {
+            throw new Error(`Invalid date format for lesson ${i + 1}`);
           }
-        })
-      );
 
-      console.log('Successfully saved topics:', topics.length);
+          const [topic] = await db
+            .insert(weeklyTopics)
+            .values({
+              courseId: parseInt(courseId),
+              topic: lesson.title,
+              standardIdentifier: lesson.standard || null,
+              weekStart: weekStart,
+            })
+            .returning();
+
+          console.log(`Successfully created topic ${i + 1}/${lessons.length}:`, {
+            title: topic.topic,
+            date: topic.weekStart,
+            standard: topic.standardIdentifier
+          });
+
+          topics.push(topic);
+        } catch (error) {
+          console.error(`Error creating topic for lesson ${i + 1}:`, error);
+          throw error;
+        }
+      }
+
+      console.log(`Successfully saved all ${topics.length} topics`);
       res.json(topics);
     } catch (error) {
       console.error("Failed to save plan:", error);
