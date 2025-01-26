@@ -396,7 +396,7 @@ export function registerRoutes(app: Express): Server {
         .from(materials)
         .where(eq(materials.courseId, courseId));
 
-      const courseContext: CourseContext = { // Added type annotation
+      const courseContext: CourseContext = {
         name: course.name,
         subject: course.subject,
         gradeLevel: course.gradeLevel,
