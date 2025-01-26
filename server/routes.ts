@@ -592,10 +592,12 @@ export function registerRoutes(app: Express): Server {
         sampleLesson: lessons[0]
       });
 
-      // First, insert or update standards
+      // First, insert standards for lessons that have them
       const standardPromises = lessons
         .filter(lesson => lesson.standard)
         .map(async (lesson: any) => {
+          if (!lesson.standard) return null;
+
           const [standard] = await db
             .insert(educationalStandards)
             .values({
@@ -623,6 +625,7 @@ export function registerRoutes(app: Express): Server {
 
       await Promise.all(standardPromises);
 
+      // Then create the weekly topics with the correct standard references
       const topics = await Promise.all(
         lessons.map(async (lesson: any, index: number) => {
           const [topic] = await db
@@ -630,7 +633,7 @@ export function registerRoutes(app: Express): Server {
             .values({
               courseId: parseInt(courseId),
               topic: lesson.title,
-              standardIdentifier: lesson.standard,
+              standardIdentifier: lesson.standard || null,
               weekStart: new Date(dates[index]),
             })
             .returning();
