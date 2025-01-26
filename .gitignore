@@ -35,8 +35,3 @@ vite.config.ts.*
 *.tar.gz
 coverage
 .vercel
-
-# Secrets and API Keys
-*.pem
-.env*
-!.env.example
