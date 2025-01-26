@@ -32,26 +32,26 @@ export default function ChatInterface({ courseId }: ChatProps) {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
+        throw new Error(await response.text());
       }
 
-      const data = await response.json();
-      return data;
+      return response.json();
     },
     onSuccess: (data) => {
-      const aiResponse = typeof data.response === 'string' 
-        ? JSON.parse(data.response) 
-        : data.response;
+      // Parse the response only if it's a string
+      const aiMessage = {
+        content: typeof data.response === 'string' 
+          ? JSON.parse(data.response).message
+          : data.response.message,
+        suggestions: typeof data.response === 'string'
+          ? JSON.parse(data.response).suggestions
+          : data.response.suggestions
+      };
 
       setMessages((prev) => [
         ...prev,
         { role: "user", content: data.message },
-        { 
-          role: "assistant", 
-          content: aiResponse.message,
-          suggestions: aiResponse.suggestions 
-        },
+        { role: "assistant", content: aiMessage.content, suggestions: aiMessage.suggestions },
       ]);
     },
     onError: (error: Error) => {
