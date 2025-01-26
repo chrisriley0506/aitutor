@@ -368,6 +368,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ message: "Course not found" });
       }
 
+      // Fixed the weekly topics query
       const [currentTopic] = await db
         .select({
           topic: weeklyTopics.topic,
@@ -379,7 +380,7 @@ export function registerRoutes(app: Express): Server {
         .from(weeklyTopics)
         .leftJoin(
           educationalStandards,
-          eq(weeklyTopics.standardId, educationalStandards.id)
+          eq(weeklyTopics.standardIdentifier, educationalStandards.identifier)
         )
         .where(eq(weeklyTopics.courseId, courseId))
         .orderBy(desc(weeklyTopics.weekStart))
