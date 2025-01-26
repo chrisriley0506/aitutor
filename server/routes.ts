@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
-import { analyzePDFContent } from "./openai";
+import { analyzePDFContent, analyzeTopic, generateTutorResponse } from "./openai";
 import PDFParser from 'pdf2json';
 import { join } from "path";
 import { tmpdir } from "os";
@@ -12,6 +12,8 @@ import { db } from "@db";
 import { courses, weeklyTopics, educationalStandards, courseEnrollments, materials, chatMessages } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import type { ChatResponse, CourseContext } from "./types"; // Added import for types
+
 
 // Configure multer for PDF uploads
 const storage = multer.diskStorage({
@@ -394,7 +396,7 @@ export function registerRoutes(app: Express): Server {
         .from(materials)
         .where(eq(materials.courseId, courseId));
 
-      const courseContext = {
+      const courseContext: CourseContext = { // Added type annotation
         name: course.name,
         subject: course.subject,
         gradeLevel: course.gradeLevel,
@@ -841,17 +843,72 @@ export function registerRoutes(app: Express): Server {
 }
 
 async function analyzeMaterial(content: string) {
-    //Implementation for analyzeMaterial is needed here.  This is not provided in the original or edited code.
-    return {}; // Placeholder return.  Replace with actual analysis logic.
+  //Implementation for analyzeMaterial is needed here.  This is not provided in the original or edited code.
+  return {}; // Placeholder return.  Replace with actual analysis logic.
 }
 
 async function analyzeTopic(description: string, grade: string, subject: string, standardsSystem: string) {
-    //Implementation for analyzeTopic is needed here. This is not provided in the original or edited code.
-    return {}; // Placeholder return. Replace with actual analysis logic.
+  //Implementation for analyzeTopic is needed here. This is not provided in the original or edited code.
+  return {}; // Placeholder return. Replace with actual analysis logic.
 }
 
-async function generateTutorResponse(message: string, courseContext: any, courseMaterials: any){
-    //Implementation for generateTutorResponse is needed here.  This is not provided in the original or edited code.
-    return {}; // Placeholder return. Replace with actual response generation logic.
+async function generateTutorResponse(
+  message: string,
+  courseContext: CourseContext,
+  materials?: { content: string; type: string }[]
+): Promise<ChatResponse> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI API key is not configured");
+  }
 
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are an AI tutor for a ${courseContext.gradeLevel} grade ${courseContext.subject} class. 
+          The current topic is: ${courseContext.currentTopic}
+          ${courseContext.standard ? `This relates to standard ${courseContext.standard.identifier}: ${courseContext.standard.description}` : ''}
+
+          Keep your responses:
+          1. Grade-appropriate
+          2. Clear and concise
+          3. Focused on the current topic
+          4. Encouraging and supportive
+
+          Provide your response in this exact JSON format:
+          {
+            "message": "Your helpful response here",
+            "suggestions": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
+          }`
+        },
+        {
+          role: "user",
+          content: message
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 800
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response received from OpenAI");
+    }
+
+    try {
+      return JSON.parse(content) as ChatResponse;
+    } catch (parseError) {
+      console.error("Failed to parse OpenAI response:", parseError);
+      // Fallback response if JSON parsing fails
+      return {
+        message: content,
+        suggestions: ["Can you tell me more?", "Would you like another example?", "What else should we practice?"]
+      };
+    }
+  } catch (error) {
+    console.error("OpenAI API error:", error);
+    throw new Error("Failed to generate tutor response");
+  }
 }

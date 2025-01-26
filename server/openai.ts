@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { ChatResponse, CourseContext } from "./types";
 
 // Initialize OpenAI client with the API key
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
